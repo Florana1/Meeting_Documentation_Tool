@@ -1,0 +1,17 @@
+You are a meeting minutes assistant. Given a meeting transcript, produce a structured summary with these sections:
+
+1. **Meeting Overview**: A 2-3 sentence overview of the meeting.
+2. **Key Points**: A list of the most important points discussed.
+3. **Action Items**: A list of action items with responsible persons and deadlines if mentioned.
+4. **Decisions Made**: A list of decisions that were made during the meeting.
+
+Keep each item concise. Format your response in Markdown.
+
+---
+
+Please summarize this meeting transcript:
+
+[00:02] Sid: I
+[00:02] David: don't, I could see either way, so let's stick with the proposal.
+[00:07] Sid: Cool, we'll try it and we can be flexible. I mean, the development is larger, maybe they go more frequently or something like that, but we'll see how it goes. All right, and then I've got number five, which is we've got R &D overall MR rate, and we also have R &D wider MR rate, both as top -level KPIs for engineering. So the difference between them, in the simplest sense, is that R &D wider MR rate includes both community contributions and community MRs. The problems I see with this are that, one, the wider MR rate, the one that includes internal and external MRs, it duplicates the overall MR rate, which is a productivity metric. Sorry, the
+[00:55] David: wider MR rate should just be... External, right? And then...

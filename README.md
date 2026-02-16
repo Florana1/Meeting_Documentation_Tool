@@ -1,0 +1,274 @@
+# Meeting Documentation Tool
+
+Convert Zoom recordings into formatted meeting minutes with speaker-labeled transcripts and AI-generated summaries.
+
+## What It Does
+
+Give it a Zoom recording (`.m4a` audio or `.mp4` video), and it will:
+
+1. **Identify speakers** -- figures out who is talking when
+2. **Transcribe speech** -- converts audio to text with timestamps
+3. **Label the transcript** -- assigns each sentence to the correct speaker
+4. **Generate a prompt file** -- ready to paste into any LLM for a summary
+5. **Output clean Markdown** -- formatted meeting minutes you can share
+
+Example output:
+
+```
+# Meeting Minutes
+**Date:** 2026-02-10  |  **Duration:** 12m  |  **Participants:** Alice, Bob
+
+---
+## Full Transcript
+
+**Alice** (00:00:05):
+Hello everyone, welcome to the meeting.
+
+**Bob** (00:00:12):
+Thanks Alice. Let's start with the agenda.
+```
+
+---
+
+## Setup (One-Time)
+
+### Step 1: Install ffmpeg
+
+ffmpeg is needed to process audio files.
+
+- **Windows:** Open a terminal and run `winget install ffmpeg`, then restart your terminal
+- **macOS:** `brew install ffmpeg`
+- **Linux:** `sudo apt install ffmpeg`
+
+### Step 2: Install Python dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Step 3: Set up HuggingFace access
+
+The speaker identification model requires a free HuggingFace account.
+
+1. Create an account at https://huggingface.co
+2. Create an access token at https://huggingface.co/settings/tokens
+3. Accept the model license agreements (click "Agree" on each page):
+   - https://huggingface.co/pyannote/speaker-diarization-3.1
+   - https://huggingface.co/pyannote/segmentation-3.0
+
+### Step 4: Create your .env file
+
+Copy the example file:
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` in a text editor and replace `hf_...` with your actual HuggingFace token:
+
+```
+HUGGINGFACE_TOKEN=hf_your_actual_token_here
+```
+
+### Step 5: Verify everything works
+
+```bash
+python main.py check-setup
+```
+
+You should see all checks pass:
+
+```
+Checking ffmpeg... OK
+Checking CUDA... Not available (will use CPU - slower)
+Checking HuggingFace token... OK
+Checking Anthropic API key... Not set (optional - only needed for --summary flag)
+
+All checks passed! You're ready to process meetings.
+```
+
+---
+
+## Usage
+
+### Typical Workflow
+
+**1. Process your Zoom recording:**
+
+```bash
+python main.py process meeting.m4a
+```
+
+This produces two files:
+- `meeting.md` -- the meeting minutes with full transcript
+- `meeting.prompt.txt` -- a ready-to-paste prompt for summarization
+
+**2. Get a summary (free):**
+
+Open `meeting.prompt.txt`, copy its contents, and paste into any LLM:
+- ChatGPT (https://chat.openai.com)
+- Claude (https://claude.ai)
+- Gemini (https://gemini.google.com)
+
+Copy the summary from the LLM and paste it into the Summary section of `meeting.md`.
+
+**3. Rename speakers:**
+
+The tool initially labels speakers as `SPEAKER_00`, `SPEAKER_01`, etc. Once you recognize who is who from the transcript, rename them:
+
+```bash
+python main.py rename meeting.md -s "SPEAKER_00=Alice,SPEAKER_01=Bob"
+```
+
+This replaces all occurrences everywhere in the file (participants, transcript, and summary).
+
+You can also rename interactively (the tool will prompt you for each name):
+
+```bash
+python main.py rename meeting.md
+```
+
+---
+
+### Commands
+
+#### `process` -- Process a recording into meeting minutes
+
+```bash
+python main.py process <INPUT_FILE> [OPTIONS]
+```
+
+**Arguments:**
+- `INPUT_FILE` -- Path to the recording file (`.m4a`, `.mp4`, `.wav`, `.mp3`, `.ogg`, `.flac`, `.webm`)
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output PATH` | Output file path (default: same name as input with `.md` extension) |
+| `-s, --speakers TEXT` | Pre-assign speaker names: `"SPEAKER_00=Alice,SPEAKER_01=Bob"` |
+| `--num-speakers N` | Hint for how many speakers to expect (improves diarization accuracy) |
+| `--whisper-model TEXT` | Whisper model size: `tiny`, `base`, `small`, `medium`, `large-v3` (default: `large-v3`) |
+| `--no-interactive` | Skip the interactive speaker naming prompt |
+| `--summary` | Use Claude API for automatic summarization (requires Anthropic API key) |
+| `--device cpu/cuda` | Force CPU or GPU (default: auto-detect) |
+
+**Examples:**
+
+```bash
+# Basic -- process and name speakers later
+python main.py process meeting.m4a --no-interactive
+
+# Name speakers upfront
+python main.py process meeting.m4a -s "SPEAKER_00=Alice,SPEAKER_01=Bob"
+
+# Use a smaller/faster model
+python main.py process meeting.m4a --whisper-model small --no-interactive
+
+# Specify output location
+python main.py process meeting.m4a -o minutes/meeting_2026-02-10.md --no-interactive
+
+# Hint that there are 3 speakers (helps accuracy)
+python main.py process meeting.m4a --num-speakers 3
+```
+
+#### `rename` -- Rename speakers in an existing file
+
+```bash
+python main.py rename <MARKDOWN_FILE> [OPTIONS]
+```
+
+**Arguments:**
+- `MARKDOWN_FILE` -- Path to the `.md` file generated by the process command
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-s, --speakers TEXT` | Speaker mapping: `"SPEAKER_00=Alice,SPEAKER_01=Bob"` |
+
+If `-s` is not provided, the tool prompts you interactively for each speaker name.
+
+Also updates the matching `.prompt.txt` file if it exists, so you can re-generate a summary with correct names.
+
+**Examples:**
+
+```bash
+# Rename with flag
+python main.py rename meeting.md -s "SPEAKER_00=Alice,SPEAKER_01=Bob"
+
+# Rename interactively
+python main.py rename meeting.md
+```
+
+#### `check-setup` -- Verify your installation
+
+```bash
+python main.py check-setup
+```
+
+Checks that ffmpeg, HuggingFace token, and optional Anthropic API key are configured correctly.
+
+---
+
+### Whisper Model Sizes
+
+Larger models are more accurate but slower, especially on CPU:
+
+| Model | Size | Speed (CPU) | Best for |
+|-------|------|-------------|----------|
+| `tiny` | 75 MB | Very fast | Quick test, low accuracy |
+| `base` | 142 MB | Fast | Short meetings, good enough quality |
+| `small` | 466 MB | Moderate | Everyday use, good accuracy |
+| `medium` | 1.5 GB | Slow | Better accuracy |
+| `large-v3` | 3 GB | Very slow | Best accuracy (default) |
+
+To use a smaller model:
+
+```bash
+python main.py process meeting.m4a --whisper-model small --no-interactive
+```
+
+---
+
+### Automatic Summarization (Optional)
+
+If you prefer automatic summaries without copy-pasting, you can use the Claude API:
+
+1. Get an API key at https://console.anthropic.com/settings/keys
+2. Install the package: `pip install anthropic`
+3. Add to your `.env` file: `ANTHROPIC_API_KEY=sk-ant-your_key_here`
+4. Run with the `--summary` flag:
+
+```bash
+python main.py process meeting.m4a --summary --no-interactive
+```
+
+This costs a small amount per request via the Anthropic API. The default (no `--summary` flag) is always free.
+
+---
+
+## Tips
+
+- **Zoom separates audio and video** after recording. Use the `.m4a` audio file -- it's smaller and processes faster than the `.mp4` video.
+- **First run is slow** because it downloads the AI models (~3 GB for Whisper large-v3, ~30 MB for diarization). Subsequent runs use the cached models.
+- **Use `--num-speakers`** if you know how many people were in the meeting. This helps the diarization model be more accurate.
+- **Use a smaller Whisper model** (`--whisper-model small`) for faster processing on CPU at the cost of some accuracy.
+- **GPU acceleration**: If you have an NVIDIA GPU, the tool auto-detects it and runs much faster. Force it with `--device cuda`.
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `ffmpeg not found` | Install ffmpeg and restart your terminal |
+| `HUGGINGFACE_TOKEN not set` | Add your token to the `.env` file |
+| Models downloading slowly | First run only -- they are cached after download |
+| Out of memory on CPU | Use a smaller Whisper model: `--whisper-model small` |
+| Wrong speaker labels | Use `--num-speakers` or run `rename` after processing |
+
+## Testing
+
+```bash
+pip install pytest
+python -m pytest tests/ -v
+```
